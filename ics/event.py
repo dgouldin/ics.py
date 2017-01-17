@@ -11,6 +11,7 @@ import copy
 from datetime import timedelta
 
 from .alarm import AlarmFactory
+from .attendee import Attendee
 from .component import Component
 from .utils import (
     parse_duration,
@@ -51,6 +52,7 @@ class Event(Component):
                  location=None,
                  url=None,
                  transparent=False,
+                 attendees=None,
                  alarms=None):
         """Instantiates a new :class:`ics.event.Event`.
 
@@ -83,6 +85,7 @@ class Event(Component):
         self.transparent = transparent
         self.alarms = set()
         self._unused = Container(name='VEVENT')
+        self.attendees = attendees or []
 
         self.name = name
         self.begin = begin
@@ -393,6 +396,35 @@ def transparent(event, line):
 def uid(event, line):
     if line:
         event.uid = line.value
+
+
+@Event._extracts('ATTENDEE')
+def attendee(event, line):
+    if line:
+        def no_op(value):
+            return value
+
+        attendee_kwargs_map = {
+            'CUTYPE': ('calendar_user_type', no_op),
+            'MEMBER': ('group_or_list_membership', no_op),
+            'ROLE': ('participation_role', no_op),
+            'PARTSTAT': ('participation_status', no_op),
+            'RSVP': ('rsvp_expectation', lambda v: v.lower() == 'true'),
+            'DELTO': ('delegatess', no_op),
+            'DELFROM': ('delegators', no_op),
+            'SENTBY': ('sent_by', no_op),
+            'CN': ('common_name', no_op),
+            'DIR': ('directory_entry_reference', no_op),
+            'LANGUAGE': ('language', no_op),
+        }
+
+        kwargs = {}
+        for param, values in line.params.iteritems():
+            if param in attendee_kwargs_map:
+                kwarg, transform_func = attendee_kwargs_map[param]
+                kwargs[kwarg] = transform_func(values[0])
+
+        event.attendees.append(Attendee(line.value, **kwargs))
 
 
 @Event._extracts('VALARM', multiple=True)
