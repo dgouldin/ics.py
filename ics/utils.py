@@ -4,6 +4,7 @@
 from __future__ import unicode_literals, absolute_import
 
 from arrow.arrow import Arrow
+from arrow.parser import ParserError as ArrowParserError
 from datetime import timedelta
 from six import PY2, PY3, StringIO, string_types, text_type, integer_types
 from six.moves import filter, map, range
@@ -44,14 +45,17 @@ def iso_to_arrow(time_container, available_tz={}):
     else:
         val = time_container.value
 
-    if tz and not (val[-1].upper() == 'Z'):
-        naive = arrow.get(val).naive
-        selected_tz = gettz(tz)
-        if not selected_tz:
-            selected_tz = available_tz.get(tz, 'UTC')
-        return arrow.get(naive, selected_tz)
-    else:
-        return arrow.get(val)
+    try:
+        if tz and not (val[-1].upper() == 'Z'):
+            naive = arrow.get(val).naive
+            selected_tz = gettz(tz)
+            if not selected_tz:
+                selected_tz = available_tz.get(tz, 'UTC')
+            return arrow.get(naive, selected_tz)
+        else:
+            return arrow.get(val)
+    except ArrowParserError as e:
+        raise parse.ParseError(unicode(e))
 
     # TODO : support floating (ie not bound to any time zone) times (cf
     # http://www.kanzaki.com/docs/ical/dateTime.html)
